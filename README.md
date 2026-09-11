@@ -177,6 +177,114 @@ overnight comme sur Trivial Pursuit.
 2. Architecture bronze/silver/gold — ce dépôt.
 3. Analyse finale Streamlit — `dashboard/streamlit_app.py`.
 
-## 6. Résultats
+## 6. Résultats — run du 11/09/2026
 
-*(à compléter après le run complet — voir `make simulate` puis les onglets du dashboard)*
+**Config** : 36 matches (round-robin + auto-confrontation, 8 agents) × 100
+tours = 7200 tours, 14 400 lignes en gold (2/tour). Run complet en 22 min 29 s.
+`temperature=0.2`, seed fixe.
+
+### Classement (`marts.agg_agent_leaderboard`)
+
+| agent | type | score moyen/tour | coopération | pardon | riposte |
+|---|---|---:|---:|---:|---:|
+| grim_trigger | codé | **2,77** | 78,3 % | 0 % | 100 % |
+| tit_for_tat | codé | 2,68 | 83,0 % | 0 % | 100 % |
+| persona_empathique | IA | 2,54 | 99,1 % | 95,8 % | 4,2 % |
+| always_cooperate | codé | 2,49 | 100 % | 100 % | 0 % |
+| persona_calculateur | IA | 2,43 | 83,1 % | 35,8 % | 64,2 % |
+| always_defect | codé | 2,39 | 0 % | 0 % | 100 % |
+| persona_rancunier | IA | 2,29 | 53,8 % | 19,2 % | 80,8 % |
+| random | codé | 2,17 | 49,6 % | 51,1 % | 48,9 % |
+
+**Constat n°1 — résultat d'Axelrod reproduit.** Les deux stratégies « nice but
+firm » (coopératives par défaut, mais qui ne se laissent jamais exploiter
+deux fois) dominent : `grim_trigger` et `tit_for_tat` terminent 1ʳᵉ et 2ᵉ,
+devant `always_cooperate` (exploitée sans jamais se venger) et `always_defect`
+(punie par tout le monde après le premier tour). C'est exactement le résultat
+historique d'Axelrod (1981) reproduit 40 ans plus tard, IA comprise.
+
+**Constat n°2 — le meilleur agent IA (`persona_empathique`) bat deux
+stratégies codées classiques**, `always_cooperate` et `always_defect` — la
+coopération générale « avec pardon sélectif » d'un LLM peut donc surpasser des
+règles fixes simples, sans les égaler face aux meilleures stratégies
+réactives strictes.
+
+### Persona IA vs équivalent codé (`marts.agg_llm_vs_coded`)
+
+| persona | équivalent codé | score persona | score code | coop persona | coop code |
+|---|---|---:|---:|---:|---:|
+| persona_empathique | tit_for_tat | 2,54 | 2,68 | 99,1 % | 83,0 % |
+| persona_calculateur | tit_for_tat | 2,43 | 2,68 | 83,1 % | 83,0 % |
+| persona_rancunier | grim_trigger | 2,29 | 2,77 | 53,8 % | 78,3 % |
+
+**Constat n°3 — aucune persona ne reproduit fidèlement son équivalent codé,
+à des degrés très différents.**
+- `persona_calculateur` (censé être un TFT strict, « sans sentiment ») a
+  presque le même taux de coopération que `tit_for_tat` (83,1 % vs 83,0 %)
+  mais un **taux de riposte de 64,2 % contre 100 %** pour le code : il rate
+  plus d'un tiers des occasions de sanctionner une trahison — la règle
+  « rejoue le dernier coup » n'est pas appliquée avec la rigueur mécanique
+  d'un algorithme.
+- `persona_empathique` diverge *volontairement et fortement* de TFT (99,1 %
+  vs 83,0 % de coopération, 95,8 % de pardon contre 0 %) — cohérent avec sa
+  description (généreux, pardonne facilement), la comparaison à TFT sert
+  surtout à quantifier *de combien* il en diffère.
+- `persona_rancunier` est la plus grosse déception : censé ne **jamais**
+  pardonner après une trahison (comme `grim_trigger`, pardon = 0 %), il
+  pardonne en réalité **19,2 %** du temps, y compris face à `always_defect`
+  (exemples en base : il recoopère aux tours 3, 12, 13, 18... face à un
+  adversaire qui n'a *jamais* coopéré une seule fois). Score final inférieur
+  à `always_defect`, alors que son équivalent codé (`grim_trigger`) est la
+  meilleure stratégie du tournoi.
+
+**Limite observée** : le schéma de sortie structurée autorise un champ
+`justification` optionnel, quasiment jamais rempli spontanément par le modèle
+(il ne renvoie que `{"move": "..."}`) — on n'a donc pas le raisonnement
+explicite de ces incohérences. Piste pour une itération suivante : rendre
+`justification` obligatoire dans le schéma.
+
+**Fiabilité du parsing** : `is_parsable = 100 %` sur les 2700 réponses IA
+(900 par persona) — la sortie structurée LM Studio n'a jamais nécessité de
+repli en texte libre sur ce run (contrairement à `phi-3.5-mini-instruct` dans
+le projet Trivial Pursuit).
+
+### Comportement émergent / équilibre de Nash (`marts.agg_cooperation_over_time`)
+
+Taux de coopération sur les 10 premiers tours vs les 10 derniers :
+
+| agent | type | début | fin | tendance |
+|---|---|---:|---:|---|
+| persona_empathique | IA | 95,6 % | **98,9 %** | converge vers la coopération totale |
+| tit_for_tat | codé | 84,4 % | 85,6 % | stable, équilibre coopératif |
+| random | codé | 51,1 % | 54,4 % | stable (bruit) |
+| grim_trigger | codé | 83,3 % | 77,8 % | légère érosion |
+| persona_calculateur | IA | 91,1 % | 82,2 % | dérive vers plus de trahison |
+| persona_rancunier | IA | 60,0 % | 52,2 % | dérive vers plus de trahison |
+
+L'horizon est fini et connu (100 tours) : la théorie des jeux prédit par
+récurrence à rebours que la trahison mutuelle est l'équilibre de Nash. On
+observe les deux issues en parallèle sur le même tournoi : `persona_empathique`
+et `tit_for_tat` **convergent vers un équilibre coopératif stable** (comme
+dans l'expérience d'Axelrod), tandis que `persona_calculateur` et
+`persona_rancunier` **dérivent vers la prédiction théorique** (plus de
+trahison en fin de partie) — sans jamais l'atteindre complètement. Aucun
+agent codé ni IA ne bascule dans la trahison systématique prédite par la
+récurrence à rebours pure.
+
+### Conclusion générale
+
+1. **Le résultat d'Axelrod se reproduit** : les stratégies réactives et
+   fermes (`grim_trigger`, `tit_for_tat`) dominent le tournoi, 40 ans après
+   l'expérience originale.
+2. **L'IA peut égaler des règles simples sans les dépasser** : le meilleur
+   agent IA bat 2 stratégies codées basiques mais reste loin des meilleures
+   stratégies réactives strictes.
+3. **Les personas en langage naturel n'implémentent pas fidèlement la règle
+   qu'ils sont censés incarner** — à des degrés très variables : quasi
+   fidèle pour `calculateur` sur la coopération mais pas sur la riposte,
+   très infidèle pour `rancunier` sur les deux. C'est la mesure directe du
+   "système d'évaluation des prompts" demandé par le sujet.
+4. **Le comportement émergent diverge selon l'agent** : certains convergent
+   vers la coopération stable (comme Axelrod), d'autres dérivent vers la
+   prédiction théorique de trahison — sur le même tournoi, les deux
+   dynamiques coexistent.
