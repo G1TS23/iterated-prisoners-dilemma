@@ -1,0 +1,20 @@
+name: "iterated_prisoners_dilemma"
+version: "1.0.0"
+config-version: 2
+
+profile: "iterated_prisoners_dilemma"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  iterated_prisoners_dilemma:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts

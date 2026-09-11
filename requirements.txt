@@ -1,0 +1,17 @@
+# Simulation / traitement
+polars>=1.9
+pyarrow>=17
+pyyaml>=6.0
+tqdm>=4.66              # barres de progression du tournoi
+
+# Enrichissement IA (LM Studio)
+lmstudio>=1.0            # SDK officiel ; fallback possible : openai>=1.40
+
+# Couche gold
+duckdb>=1.1
+dbt-core>=1.9
+dbt-duckdb>=1.9
+
+# Dashboard
+streamlit>=1.39
+altair>=5.4

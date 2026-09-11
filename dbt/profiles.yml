@@ -1,0 +1,12 @@
+# Profil local (pas de secret). Utilisé via `DBT_PROFILES_DIR=.` (voir Makefile
+# -- les cibles dbt font `cd dbt` avant d'invoquer dbt, d'où "." et non "dbt").
+iterated_prisoners_dilemma:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DBT_GOLD_DB', '../data/gold/gold.duckdb') }}"
+      threads: 4
+      extensions:
+        - httpfs
+        - parquet

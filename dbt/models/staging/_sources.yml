@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: silver
+    description: "Couche silver (Parquet) produite par src/clean_silver.py."
+    meta:
+      external_location: "read_parquet('{{ env_var('SILVER_DIR', '../data/silver') }}/{name}.parquet')"
+    tables:
+      - name: turns
+        description: "1 ligne = (match, tour, joueur), colonnes dérivées incluses."
+        columns:
+          - name: match_id
+            tests: [not_null]
+          - name: player
+            tests: [not_null]

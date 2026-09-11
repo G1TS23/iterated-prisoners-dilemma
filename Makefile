@@ -1,0 +1,55 @@
+# Pipeline complet : make all
+# Python : dbt-core ne supporte pas encore 3.14 -> on cible 3.13.
+PYTHON ?= python3.13
+VENV   := .venv
+PY     := $(VENV)/bin/python
+PIP    := $(VENV)/bin/pip
+DBT    := $(VENV)/bin/dbt
+
+# Toutes les cibles dbt font `cd dbt` avant d'invoquer dbt : le profil est donc
+# cherché dans le dossier courant après ce cd, d'où "." et non "dbt".
+export DBT_PROFILES_DIR := .
+export DBT_GOLD_DB      := ../data/gold/gold.duckdb
+export SILVER_DIR        := ../data/silver
+
+.PHONY: help venv install hooks simulate clean-silver build build-full test dashboard all clean-data
+
+help:
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+
+venv: ## Crée le virtualenv
+	$(PYTHON) -m venv $(VENV)
+
+install: venv hooks ## Installe les dépendances + packages dbt + hook pre-commit
+	$(PIP) install --upgrade pip
+	$(PIP) install -r requirements.txt
+	cd dbt && $(abspath $(DBT)) deps
+
+hooks: ## Active le hook pre-commit versionné (.githooks/)
+	git config core.hooksPath .githooks
+	chmod +x .githooks/*
+
+simulate: ## Étape 1 : tournoi (stratégies codées + agents IA) -> data/bronze/turns_raw.parquet
+	$(PY) src/simulate.py $(ARGS)
+
+clean-silver: ## Étape 2 : enrichissement -> data/silver/turns.parquet
+	$(PY) src/clean_silver.py
+
+build: ## Étape 3a : construction de la couche gold avec dbt
+	cd dbt && $(abspath $(DBT)) build
+
+build-full: ## build --full-refresh (après un changement de colonnes d'un seed)
+	cd dbt && $(abspath $(DBT)) build --full-refresh
+
+test: ## Tests dbt seuls
+	cd dbt && $(abspath $(DBT)) test
+
+dashboard: ## Étape 3b : dashboard Streamlit (lecture seule de gold)
+	$(VENV)/bin/streamlit run dashboard/streamlit_app.py
+
+all: simulate clean-silver build ## Pipeline complet (hors dashboard)
+
+clean-data: ## Supprime les données générées (bronze/silver/gold)
+	rm -rf data/bronze/* data/silver/* data/gold/*
+	@touch data/bronze/.gitkeep data/silver/.gitkeep data/gold/.gitkeep

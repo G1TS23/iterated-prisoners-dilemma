@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: fct_turns
+    description: "Table de faits : une ligne par (match, tour, joueur)."
+    columns:
+      - name: turn_key
+        tests: [not_null, unique]
+      - name: player
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_agent')
+                field: agent_name
+      - name: move
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["C", "D"]
+      - name: round_outcome
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["mutual_coop", "mutual_defect", "exploited", "exploiter"]
+
+  - name: dim_agent
+    columns:
+      - name: agent_name
+        tests: [not_null, unique]
+
+  - name: agg_agent_leaderboard
+    description: "Classement des agents : score moyen, coopération, pardon, riposte."
+  - name: agg_matchup_matrix
+    description: "Table croisée score moyen par (player, opponent)."
+  - name: agg_cooperation_over_time
+    description: "Taux de coopération par tour, par agent."
+  - name: agg_llm_vs_coded
+    description: "Comparaison persona IA <-> stratégie codée équivalente."
