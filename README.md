@@ -18,7 +18,8 @@ dilemme du prisonnier itératif : stratégies codées + agents IA locaux
 - [3. Setup complet](#3-setup-complet)
 - [4. Décisions du projet](#4-décisions-du-projet)
 - [5. Livrables](#5-livrables)
-- [6. Résultats](#6-résultats)
+- [6. Résultats](#6-résultats--run-du-11092026)
+- [7. Limites méthodologiques](#7-limites-méthodologiques)
 
 ## 1. Méthodologie
 
@@ -42,6 +43,8 @@ Trahir (`D`). Matrice de gains classique (Axelrod) :
 | **Bronze** | tours bruts du tournoi | `data/bronze/turns_raw.parquet` | `src/simulate.py` |
 | **Silver** | enrichi (mémoire, streaks, pardon...) | `data/silver/turns.parquet` | `src/clean_silver.py` |
 | **Gold** | indicateurs métier | `data/gold/gold.duckdb` | dbt (`dbt/`) |
+
+Diagramme du pipeline et modèle dimensionnel : [`docs/architecture.md`](docs/architecture.md).
 
 ### Étape 1 — Génération du tournoi
 
@@ -114,6 +117,7 @@ src/common.py                chemins, matrice de gains, .env
 dbt/                         projet dbt-duckdb (staging + marts + tests)
 dashboard/streamlit_app.py   rapport interactif
 docs/SUJET.md                sujet complet
+docs/architecture.md         diagramme du pipeline + modèle dimensionnel
 data/{bronze,silver,gold}/   data lake (gitignoré)
 Makefile                     orchestration : make all
 ```
@@ -166,10 +170,14 @@ overnight comme sur Trivial Pursuit.
   avec un équivalent codé pour comparaison directe (`agg_llm_vs_coded`).
 - **Mémoire du prompt** : résumé compact plutôt qu'historique complet — coût
   en tokens constant, tenable sur 100+ tours (`src/memory.py`).
-- **Système d'évaluation des personas** (demandé par le sujet) : `is_parsable`
-  (taux de sorties reconnues comme C/D) + comparaison directe à l'équivalent
-  codé dans `agg_llm_vs_coded` (écart de taux de coopération/pardon/riposte =
-  mesure de fidélité du persona à sa description).
+- **Système d'évaluation des personas/prompts** (demandé par le sujet), 3
+  niveaux : (1) `is_parsable` — la sortie est-elle exploitable ? ;
+  (2) `agg_llm_vs_coded` — écart de *résultat* (score, coopération, pardon)
+  avec l'équivalent codé ; (3) **`agg_persona_fidelity`** — écart de
+  *décision* : chaque coup de l'IA est comparé à celui que la règle codée aurait
+  joué avec exactement le même historique (rejeu, sans appel LLM en plus).
+  Le seed `agent_meta.csv` distingue les équivalents `stricte` (calculateur,
+  rancunier) de l'équivalent `approchee` (empathique, volontairement généreux).
 
 ## 5. Livrables
 
@@ -217,25 +225,48 @@ réactives strictes.
 | persona_calculateur | tit_for_tat | 2,43 | 2,68 | 83,1 % | 83,0 % |
 | persona_rancunier | grim_trigger | 2,29 | 2,77 | 53,8 % | 78,3 % |
 
-**Constat n°3 — aucune persona ne reproduit fidèlement son équivalent codé,
-à des degrés très différents.**
-- `persona_calculateur` (censé être un TFT strict, « sans sentiment ») a
-  presque le même taux de coopération que `tit_for_tat` (83,1 % vs 83,0 %)
-  mais un **taux de riposte de 64,2 % contre 100 %** pour le code : il rate
-  plus d'un tiers des occasions de sanctionner une trahison — la règle
-  « rejoue le dernier coup » n'est pas appliquée avec la rigueur mécanique
-  d'un algorithme.
-- `persona_empathique` diverge *volontairement et fortement* de TFT (99,1 %
-  vs 83,0 % de coopération, 95,8 % de pardon contre 0 %) — cohérent avec sa
-  description (généreux, pardonne facilement), la comparaison à TFT sert
-  surtout à quantifier *de combien* il en diffère.
-- `persona_rancunier` est la plus grosse déception : censé ne **jamais**
-  pardonner après une trahison (comme `grim_trigger`, pardon = 0 %), il
-  pardonne en réalité **19,2 %** du temps, y compris face à `always_defect`
-  (exemples en base : il recoopère aux tours 3, 12, 13, 18... face à un
-  adversaire qui n'a *jamais* coopéré une seule fois). Score final inférieur
-  à `always_defect`, alors que son équivalent codé (`grim_trigger`) est la
-  meilleure stratégie du tournoi.
+**Constat n°3 — aucune persona ne reproduit exactement son équivalent codé,
+et le verdict dépend du niveau de mesure.** On a deux lectures complémentaires :
+
+*Niveau résultat* (table ci-dessus) : `persona_rancunier` s'écarte le plus de
+`grim_trigger` (-0,48 pt/tour, 53,8 % de coopération contre 78,3 %).
+
+*Niveau décision* (`marts.agg_persona_fidelity` — on rejoue chaque décision de
+l'IA dans la règle codée avec le même historique) :
+
+| persona | équivalent | fidélité | riposte respectée* | coopération respectée** |
+|---|---|---:|---:|---:|
+| persona_rancunier | grim_trigger (stricte) | **91,4 %** | 84,7 % | 99,5 % |
+| persona_calculateur | tit_for_tat (stricte) | 90,3 % | **64,2 %** | 99,3 % |
+| persona_empathique | tit_for_tat (approchée) | 84,6 % | 4,2 % | 99,7 % |
+
+\* part des tours où la règle impose de trahir et où le persona trahit bien.
+\*\* idem pour coopérer.
+
+**Ce que ça change à la lecture** (et corrige une première interprétation
+fondée uniquement sur les agrégats) :
+- Toutes les personas sont quasi parfaites sur ce qui est *facile* — coopérer
+  quand la règle l'exige (≥ 99 %). L'infidélité se concentre **entièrement sur
+  la riposte** : c'est la seule chose qu'un LLM 3B applique mal.
+- Décision par décision, `persona_rancunier` est en fait la **plus fidèle** (91 %),
+  et non la moins : elle n'échoue à ne pas pardonner que dans ~15 % des tours
+  où la règle l'impose (pire face à `always_defect` : 75 % de fidélité —
+  elle recoopère face à un adversaire qui n'a jamais coopéré).
+- `persona_calculateur`, censé être un donnant-donnant strict, est celui qui
+  **rate le plus la riposte** (36 % des trahisons non sanctionnées).
+- `persona_empathique` n'est pas une imitation ratée de TFT : c'est une variante
+  volontairement généreuse (riposte 4 %, pardon 96 %), et elle est la meilleure IA.
+- Pourquoi le rancunier perd-il autant en score (-0,48) avec seulement ~15 %
+  d'écart de décision ? **Hypothèse non vérifiée causalement** : la règle grim est
+  *absorbante* — un seul pardon à tort change la suite de la partie — donc de
+  petites erreurs de décision s'amplifient en grosses erreurs de trajectoire.
+
+**Réciprocité** (`marts.agg_reciprocity`, corrélation entre mon coup au tour t
+et le coup adverse au tour t-1) : `tit_for_tat` 1,00 · `grim_trigger` 0,84 ·
+`persona_calculateur` 0,74 · `persona_rancunier` 0,59 · `persona_empathique` 0,17 ·
+`random` −0,03 (les agents à comportement constant n'ont pas de corrélation
+définie). Lecture : les personas IA sont **réactives mais moins mécaniquement**
+que les règles codées, dans l'ordre attendu (calculateur > rancunier > empathique).
 
 **Limite observée** : le schéma de sortie structurée autorise un champ
 `justification` optionnel, quasiment jamais rempli spontanément par le modèle
@@ -279,12 +310,38 @@ récurrence à rebours pure.
 2. **L'IA peut égaler des règles simples sans les dépasser** : le meilleur
    agent IA bat 2 stratégies codées basiques mais reste loin des meilleures
    stratégies réactives strictes.
-3. **Les personas en langage naturel n'implémentent pas fidèlement la règle
-   qu'ils sont censés incarner** — à des degrés très variables : quasi
-   fidèle pour `calculateur` sur la coopération mais pas sur la riposte,
-   très infidèle pour `rancunier` sur les deux. C'est la mesure directe du
-   "système d'évaluation des prompts" demandé par le sujet.
+3. **Les personas en langage naturel approximent leur règle sans l'appliquer
+   mécaniquement — et c'est la *riposte* qui leur échappe** : ≥ 99 % de
+   fidélité pour coopérer quand il le faut, mais 64 % (calculateur) à 85 %
+   (rancunier) pour sanctionner quand il le faut. C'est la mesure directe du
+   « système d'évaluation des prompts » demandé par le sujet (`agg_persona_fidelity`).
 4. **Le comportement émergent diverge selon l'agent** : certains convergent
    vers la coopération stable (comme Axelrod), d'autres dérivent vers la
    prédiction théorique de trahison — sur le même tournoi, les deux
    dynamiques coexistent.
+
+## 7. Limites méthodologiques
+
+- **1 partie par paire** (`N_REPEATS=1`) : aucune barre d'erreur. Les paires
+  impliquant `random` ou un LLM (température 0,2) sont stochastiques — un
+  classement serré (ex. `persona_calculateur` 2,43 vs `always_defect` 2,39) ne
+  doit pas être sur-interprété. Piste : `N_REPEATS≥5` et intervalles de confiance.
+- **Un seul modèle (3B, Q4)** incarne les 3 personas : on mesure l'effet du
+  *prompt*, pas celui du modèle. Ce que fait un modèle plus gros reste ouvert.
+- **Réciprocité ↔ score calculée sur 6 agents** seulement : indicatif, pas
+  une corrélation statistiquement exploitable.
+- **`justification` quasi jamais remplie** : le schéma JSON la laisse optionnelle,
+  le modèle ne renvoie que `{"move": ...}` — on n'a pas le raisonnement derrière
+  les incohérences. Piste : la rendre obligatoire.
+- **Comptage `n_matches` du classement** : un match d'auto-confrontation compte
+  pour 1 match mais ses deux sièges contribuent aux tours de l'agent (d'où
+  900 tours joués pour 8 matches ; toutes les métriques sont calculées au
+  niveau ligne, donc non affectées).
+- **Fidélité mesurée sur les équivalents `stricte` seulement** pour être
+  interprétable ; `random` n'a pas de « coup attendu » déterministe.
+- **Horizon non communiqué** : les agents IA ne savent pas combien de tours
+  restent — l'effet d'horizon (trahison de fin de partie) n'est donc pas testé.
+- **Artefact de prompt au 1er tour du run publié** : `memory.py` écrivait
+  littéralement « Tour 1/N » (placeholder jamais remplacé). Corrigé dans le
+  code après le run ; les données publiées ont été générées avec l'ancien
+  libellé. Ne concerne que le 1er tour de chaque partie IA ; effet non mesuré.

@@ -37,3 +37,18 @@ models:
     description: "Taux de coopération par tour, par agent."
   - name: agg_llm_vs_coded
     description: "Comparaison persona IA <-> stratégie codée équivalente."
+  - name: agg_persona_fidelity
+    description: "Évaluation des prompts : fidélité tour par tour de chaque persona à son équivalent codé."
+    columns:
+      - name: persona
+        tests: [not_null, unique]
+      - name: fidelite
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+  - name: agg_persona_fidelity_by_opponent
+    description: "Fidélité des personas ventilée par adversaire."
+  - name: agg_reciprocity
+    description: "Corrélation entre mon coup au tour t et le coup adverse au tour t-1."

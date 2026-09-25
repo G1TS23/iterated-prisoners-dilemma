@@ -37,6 +37,9 @@ leaderboard = q("select * from marts.agg_agent_leaderboard")
 matrix = q("select * from marts.agg_matchup_matrix")
 coop_time = q("select * from marts.agg_cooperation_over_time")
 llm_vs_coded = q("select * from marts.agg_llm_vs_coded")
+fidelity = q("select * from marts.agg_persona_fidelity")
+fidelity_opp = q("select * from marts.agg_persona_fidelity_by_opponent")
+recip = q("select * from marts.agg_reciprocity")
 fct = q("select * from marts.fct_turns")
 
 st.title("🤝 Dilemme du prisonnier itératif — tournoi Axelrod")
@@ -45,8 +48,9 @@ st.caption(f"{fct.match_id.nunique():,} matches · {fct.turn.max()} tours max ·
            f"({(leaderboard.agent_type == 'llm').sum()} IA, "
            f"{(leaderboard.agent_type == 'coded').sum()} codés)")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Classement", "Table croisée", "Coopération dans le temps", "IA vs codé", "Explorateur de parties"]
+tab1, tab2, tab3, tab_corr, tab4, tab5, tab_interp = st.tabs(
+    ["Classement", "Table croisée", "Coopération dans le temps", "Corrélations",
+     "IA vs codé & fidélité", "Explorateur de parties", "Interprétation"]
 )
 
 with tab1:
@@ -101,6 +105,37 @@ with tab3:
     st.caption("Une courbe qui se stabilise proche de 100 % = équilibre coopératif "
                "émergent ; proche de 0 % = escalade vers la trahison mutuelle.")
 
+with tab_corr:
+    st.caption("Réciprocité = corrélation entre mon coup au tour t et le coup de "
+               "l'adversaire au tour t-1 (+1 : miroir parfait type tit_for_tat ; "
+               "0 : indifférent ; absent : agent à comportement constant).")
+    rc = recip.dropna(subset=["reciprocite"])
+    st.altair_chart(
+        alt.Chart(rc).mark_bar().encode(
+            x=alt.X("agent:N", sort="-y", title=None),
+            y=alt.Y("reciprocite:Q", title="Réciprocité (corrélation)", scale=alt.Scale(domain=[-0.2, 1])),
+            color=alt.Color("agent_type:N", title="Type"),
+            tooltip=["agent", alt.Tooltip("reciprocite", format=".2f"),
+                     alt.Tooltip("score_moyen_par_tour", format=".2f")],
+        ).properties(height=320),
+        use_container_width=True,
+    )
+    st.subheader("Réciprocité vs score")
+    st.altair_chart(
+        alt.Chart(rc).mark_circle(size=220).encode(
+            x=alt.X("reciprocite:Q", title="Réciprocité", scale=alt.Scale(zero=False)),
+            y=alt.Y("score_moyen_par_tour:Q", title="Score moyen / tour", scale=alt.Scale(zero=False)),
+            color=alt.Color("agent_type:N", title="Type"),
+            tooltip=["agent", alt.Tooltip("reciprocite", format=".2f"),
+                     alt.Tooltip("score_moyen_par_tour", format=".2f")],
+        ).properties(height=340),
+        use_container_width=True,
+    )
+    if len(rc) >= 3:
+        r = rc["reciprocite"].corr(rc["score_moyen_par_tour"])
+        st.info(f"Corrélation réciprocité ↔ score sur les {len(rc)} agents à comportement "
+                f"non constant : **{r:+.2f}** (échantillon minuscule — indicatif, pas une preuve).")
+
 with tab4:
     st.caption("Chaque persona IA comparé à sa stratégie codée équivalente "
                "(config/personas.yaml) — l'écart mesure la fidélité du prompt.")
@@ -132,6 +167,26 @@ with tab4:
         use_container_width=True,
     )
 
+    st.subheader("Évaluation des prompts : fidélité tour par tour")
+    st.caption("Pour chaque décision d'un persona, on rejoue son historique dans l'équivalent "
+               "codé et on compare. `fidélité` = même coup ; `riposte respectée` = quand la règle "
+               "exige de trahir, le persona trahit-il ?")
+    st.dataframe(
+        fidelity.style.format({"fidelite": "{:.1%}", "riposte_attendue_respectee": "{:.1%}",
+                               "cooperation_attendue_respectee": "{:.1%}", "taux_parsable": "{:.1%}"}),
+        use_container_width=True,
+    )
+    fo = fidelity_opp.dropna(subset=["fidelite"])
+    st.altair_chart(
+        alt.Chart(fo).mark_rect().encode(
+            x=alt.X("opponent:N", title=None, axis=alt.Axis(labelAngle=-40)),
+            y=alt.Y("persona:N", title=None),
+            color=alt.Color("fidelite:Q", title="Fidélité", scale=alt.Scale(scheme="redyellowgreen", domain=[0.5, 1])),
+            tooltip=["persona", "opponent", alt.Tooltip("fidelite", format=".1%")],
+        ).properties(height=200, title="Fidélité par adversaire (où le persona décroche de sa règle)"),
+        use_container_width=True,
+    )
+
 with tab5:
     st.caption("Rejoue un match tour par tour, avec la justification du modèle si disponible.")
     match_ids = sorted(fct.match_id.unique())
@@ -149,3 +204,43 @@ with tab5:
             if pm.player_type.iloc[0] == "llm":
                 show_cols.append("raw_output")
             st.dataframe(pm[show_cols], use_container_width=True, height=360)
+
+with tab_interp:
+    best = leaderboard.sort_values("score_moyen_par_tour", ascending=False).iloc[0]
+    worst = leaderboard.sort_values("score_moyen_par_tour").iloc[0]
+    llm_lb = leaderboard[leaderboard.agent_type == "llm"].sort_values("score_moyen_par_tour", ascending=False)
+    strict = fidelity[fidelity.equivalence == "stricte"].sort_values("fidelite", ascending=False)
+    ct = coop_time.copy()
+    drift = (ct[ct.turn > ct.turn.max() - 10].groupby("agent").taux_cooperation.mean()
+             - ct[ct.turn <= 10].groupby("agent").taux_cooperation.mean()).dropna()
+    drift = drift[[a for a in drift.index if a in set(llm_lb.agent) | {"tit_for_tat", "grim_trigger"}]]
+    st.header("Ce que disent les données")
+    st.markdown(
+        f"""
+- **Classement** : `{best.agent}` domine ({best.score_moyen_par_tour:.2f} pt/tour), `{worst.agent}` ferme la marche
+  ({worst.score_moyen_par_tour:.2f}). Les stratégies *gentilles mais fermes* (coopèrent d'abord, ripostent
+  aux trahisons) devancent les stratégies inconditionnelles — le résultat d'Axelrod (1981).
+- **Meilleur agent IA** : `{llm_lb.iloc[0].agent}` ({llm_lb.iloc[0].score_moyen_par_tour:.2f} pt/tour,
+  coopération {llm_lb.iloc[0].taux_cooperation:.0%}).
+- **Fidélité des personas** (équivalents *stricts* uniquement — `empathique` est une variante
+  volontairement généreuse de TFT) : décision par décision, la plus fidèle est
+  `{strict.iloc[0].persona}` ({strict.iloc[0].fidelite:.0%}) ; celle qui respecte le moins
+  l'obligation de riposter est `{strict.sort_values('riposte_attendue_respectee').iloc[0].persona}`
+  ({strict.riposte_attendue_respectee.min():.0%} des tours où la règle impose de trahir).
+- **Dynamique** (coopération, 10 derniers tours vs 10 premiers) : """
+        + ", ".join(f"`{a}` {v:+.0%}" for a, v in drift.sort_values().items()) + "."
+    )
+    st.header("Lecture théorique")
+    st.markdown(
+        """
+- **Équilibre de Nash** : horizon fini et connu ⇒ par récurrence à rebours, la trahison mutuelle est
+  l'unique équilibre de Nash. On n'observe pourtant **aucune** bascule générale vers la trahison :
+  les agents réactifs maintiennent la coopération (résultat empirique d'Axelrod).
+- **Effet de l'IA** : un persona en langage naturel *approxime* une règle mais ne l'applique pas
+  mécaniquement — de petits écarts de décision (riposte manquée) changent la trajectoire de toute la
+  partie, surtout pour une règle *absorbante* comme le grim trigger. Un LLM local apporte donc de la
+  **variabilité comportementale** absente des stratégies codées.
+- **Limites** : 1 partie par paire (pas de barre d'erreur), un seul modèle 3B, température 0,2,
+  champ `justification` quasi jamais rempli — voir le README pour le détail.
+"""
+    )

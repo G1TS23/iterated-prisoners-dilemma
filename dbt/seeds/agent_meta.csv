@@ -1,9 +1,9 @@
-agent_name,agent_type,description,coded_equivalent
-always_cooperate,coded,Coopere systematiquement,
-always_defect,coded,Trahit systematiquement,
-tit_for_tat,coded,Donnant-donnant : rejoue le dernier coup adverse,
-random,coded,Coup aleatoire a chaque tour,
-grim_trigger,coded,Coopere jusqu'a la 1re trahison adverse puis ne pardonne jamais,
-persona_empathique,llm,Cooperatif generaliste qui pardonne facilement une trahison isolee,tit_for_tat
-persona_calculateur,llm,Reagit strictement au dernier coup adverse sans sentiment,tit_for_tat
-persona_rancunier,llm,Coopere par defaut mais ne pardonne jamais apres une trahison,grim_trigger
+agent_name,agent_type,description,coded_equivalent,equivalence
+always_cooperate,coded,Coopere systematiquement,,
+always_defect,coded,Trahit systematiquement,,
+tit_for_tat,coded,Donnant-donnant : rejoue le dernier coup adverse,,
+random,coded,Coup aleatoire a chaque tour,,
+grim_trigger,coded,Coopere jusqu'a la 1re trahison adverse puis ne pardonne jamais,,
+persona_empathique,llm,Cooperatif generaliste qui pardonne facilement une trahison isolee,tit_for_tat,approchee
+persona_calculateur,llm,Reagit strictement au dernier coup adverse sans sentiment,tit_for_tat,stricte
+persona_rancunier,llm,Coopere par defaut mais ne pardonne jamais apres une trahison,grim_trigger,stricte

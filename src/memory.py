@@ -28,7 +28,7 @@ def _cumulative_score(my_h: list[str], opp_h: list[str]) -> int:
 def summarize_memory(my_history: list[str], opp_history: list[str]) -> str:
     turn = len(opp_history) + 1
     if not opp_history:
-        return f"Tour {turn}/N — première interaction, aucun historique disponible."
+        return f"Tour {turn} — première interaction, aucun historique disponible."
 
     n = len(opp_history)
     opp_coop = opp_history.count("C")
