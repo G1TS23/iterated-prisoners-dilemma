@@ -44,7 +44,7 @@ models:
         tests: [not_null, unique]
       - name: fidelite
         tests:
-          - dbt_utils.accepted_range:
+          - accepted_range:
               arguments:
                 min_value: 0
                 max_value: 1
