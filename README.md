@@ -195,7 +195,35 @@ overnight comme sur Trivial Pursuit.
 > Ce run **remplace** celui du 11/09 (une seule répétition), qui souffrait
 > justement du problème signalé dans ses propres limites : un classement serré
 > issu d'un seul tirage par paire ne se tient pas. Deux agents changent de
-> rang une fois le bruit moyenné — voir l'encart ci-dessous.
+> rang une fois le bruit moyenné — comparaison directe ci-dessous.
+
+### Écart entre le run à 1 répétition (11/09) et à 5 répétitions (25/09)
+
+| agent | rang (1 rép.) | score (1 rép.) | rang (5 rép.) | score (5 rép.) | Δ rang | Δ score |
+|---|---:|---:|---:|---:|---:|---:|
+| grim_trigger | 1 | 2,77 | 1 | 2,70 | = | −0,07 |
+| tit_for_tat | 2 | 2,68 | 3 | 2,58 | ↓1 | −0,10 |
+| persona_empathique | 3 | 2,54 | 4 | 2,51 | ↓1 | −0,03 |
+| always_cooperate | 4 | 2,49 | 5 | 2,51 | ↓1 | +0,02 |
+| **persona_calculateur** | **5** | **2,43** | **2** | **2,60** | **↑3** | **+0,17** |
+| always_defect | 6 | 2,39 | 7 | 2,40 | ↓1 | +0,01 |
+| **persona_rancunier** | **7** | **2,29** | **6** | **2,43** | **↑1** | **+0,14** |
+| random | 8 | 2,17 | 8 | 2,15 | = | −0,02 |
+
+Seuls le 1ᵉʳ (`grim_trigger`) et le dernier (`random`) sont stables — le reste
+du classement bouge d'au moins un rang. `persona_calculateur` est le
+changement le plus net (+3 rangs, +0,17 pt/tour). **Cause identifiée, pas
+supposée** : sur les 8 matches de `persona_calculateur` au run à 1 répétition,
+7 sont à 3,00 pt/tour pile (coopération mutuelle parfaite, y compris
+l'auto-confrontation) et 1 seul dévie — `persona_calculateur` vs
+`persona_rancunier`, à 1,06 pt/tour, une spirale de trahisons mutuelles sur
+une bonne partie de la partie (`CCDCCCCDCCDDDDCDD...`). Ce même duel répété
+4 fois de plus (`repeat` 2 à 5) reste au contraire à 3,00 à chaque fois. Un
+seul tirage malchanceux (température 0,2) sur une seule paire pesait donc
+~1/8 de la moyenne du run à 1 répétition et suffisait à faire perdre 3 rangs
+à l'agent — démonstration concrète de pourquoi `N_REPEATS=1` n'était pas
+fiable. Détail de ce qui a changé (fidélité, dérive dans le temps) dans les
+sections suivantes.
 
 ### Classement (`marts.agg_agent_leaderboard`, moyenne des 5 répétitions)
 
