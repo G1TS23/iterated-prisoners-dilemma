@@ -14,10 +14,37 @@ import altair as alt
 import duckdb
 import pandas as pd
 import streamlit as st
+from packaging.version import Version
 
 GOLD_DB = Path(__file__).resolve().parents[1] / "data" / "gold" / "gold.duckdb"
 
 st.set_page_config(page_title="Dilemme du prisonnier itératif", layout="wide")
+
+# --- Compatibilité Streamlit : "pleine largeur" -------------------------------
+# `use_container_width` est déprécié (retiré après 2025-12-31) au profit de
+# `width="stretch"`, qui n'existe pas dans toutes les versions. Seuils MESURÉS
+# en installant chaque version (les notes de version se sont révélées
+# inexactes, et `"width" in signature` est trompeur : st.dataframe a toujours eu
+# un `width` entier, sans accepter "stretch") :
+#   st.dataframe(width="stretch")    : KO en 1.48.0, OK dès 1.49.0
+#   st.altair_chart(width="stretch") : paramètre absent en 1.50.0, OK dès 1.51.0
+_ST_VERSION = Version(st.__version__)
+STRETCH_DF = ({"width": "stretch"} if _ST_VERSION >= Version("1.49")
+              else {"use_container_width": True})
+STRETCH_CHART = ({"width": "stretch"} if _ST_VERSION >= Version("1.51")
+                 else {"use_container_width": True})
+
+# Plancher testé : le dashboard a été exécuté (streamlit AppTest) de 1.39 à la
+# version courante. En dessous, rien n'est garanti -> message explicite plutôt
+# qu'un TypeError obscur au milieu de la page.
+MIN_STREAMLIT = Version("1.39")
+if _ST_VERSION < MIN_STREAMLIT:
+    st.error(
+        f"Streamlit {st.__version__} détecté : ce dashboard est testé à partir de "
+        f"la version {MIN_STREAMLIT}. Mets à jour avec `pip install -U streamlit` "
+        "(ou relance `make install`)."
+    )
+    st.stop()
 
 
 @st.cache_resource
@@ -61,7 +88,7 @@ with tab1:
             "taux_pardon": "{:.1%}", "taux_riposte": "{:.1%}",
             "temps_moyen_reponse_s": "{:.2f} s",
         }),
-        width="stretch",
+        **STRETCH_DF,
     )
     st.altair_chart(
         alt.Chart(lb).mark_bar().encode(
@@ -71,7 +98,7 @@ with tab1:
             tooltip=["agent", alt.Tooltip("score_moyen_par_tour", format=".2f"),
                      alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=380),
-        width="stretch",
+        **STRETCH_CHART,
     )
 
 with tab2:
@@ -85,7 +112,7 @@ with tab2:
             tooltip=["player", "opponent", alt.Tooltip("score_moyen_par_tour", format=".2f"),
                      alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=420),
-        width="stretch",
+        **STRETCH_CHART,
     )
 
 with tab3:
@@ -100,7 +127,7 @@ with tab3:
             strokeDash=alt.StrokeDash("agent_type:N", title="Type"),
             tooltip=["agent", "turn", alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=420).interactive(),
-        width="stretch",
+        **STRETCH_CHART,
     )
     st.caption("Une courbe qui se stabilise proche de 100 % = équilibre coopératif "
                "émergent ; proche de 0 % = escalade vers la trahison mutuelle.")
@@ -118,7 +145,7 @@ with tab_corr:
             tooltip=["agent", alt.Tooltip("reciprocite", format=".2f"),
                      alt.Tooltip("score_moyen_par_tour", format=".2f")],
         ).properties(height=320),
-        width="stretch",
+        **STRETCH_CHART,
     )
     st.subheader("Réciprocité vs score")
     st.altair_chart(
@@ -129,7 +156,7 @@ with tab_corr:
             tooltip=["agent", alt.Tooltip("reciprocite", format=".2f"),
                      alt.Tooltip("score_moyen_par_tour", format=".2f")],
         ).properties(height=340),
-        width="stretch",
+        **STRETCH_CHART,
     )
     if len(rc) >= 3:
         r = rc["reciprocite"].corr(rc["score_moyen_par_tour"])
@@ -150,7 +177,7 @@ with tab4:
             "riposte_persona": "{:.1%}", "riposte_code": "{:.1%}",
             "temps_moyen_reponse_s": "{:.2f} s",
         }),
-        width="stretch",
+        **STRETCH_DF,
     )
     melt = disp.melt(id_vars=["persona"], value_vars=["coop_persona", "coop_code"],
                      var_name="source", value_name="taux_cooperation")
@@ -164,7 +191,7 @@ with tab4:
                                             range=["#4C78A8", "#B0B0B0"])),
             tooltip=["persona", "source", alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=340),
-        width="stretch",
+        **STRETCH_CHART,
     )
 
     st.subheader("Évaluation des prompts : fidélité tour par tour")
@@ -174,7 +201,7 @@ with tab4:
     st.dataframe(
         fidelity.style.format({"fidelite": "{:.1%}", "riposte_attendue_respectee": "{:.1%}",
                                "cooperation_attendue_respectee": "{:.1%}", "taux_parsable": "{:.1%}"}),
-        width="stretch",
+        **STRETCH_DF,
     )
     fo = fidelity_opp.dropna(subset=["fidelite"])
     st.altair_chart(
@@ -184,7 +211,7 @@ with tab4:
             color=alt.Color("fidelite:Q", title="Fidélité", scale=alt.Scale(scheme="redyellowgreen", domain=[0.5, 1])),
             tooltip=["persona", "opponent", alt.Tooltip("fidelite", format=".1%")],
         ).properties(height=200, title="Fidélité par adversaire (où le persona décroche de sa règle)"),
-        width="stretch",
+        **STRETCH_CHART,
     )
 
 with tab5:
@@ -203,7 +230,7 @@ with tab5:
             show_cols = ["turn", "move", "opponent_move", "payoff", "own_cum_score", "round_outcome"]
             if pm.player_type.iloc[0] == "llm":
                 show_cols.append("raw_output")
-            st.dataframe(pm[show_cols], width="stretch", height=360)
+            st.dataframe(pm[show_cols], **STRETCH_DF, height=360)
 
 with tab_interp:
     best = leaderboard.sort_values("score_moyen_par_tour", ascending=False).iloc[0]
