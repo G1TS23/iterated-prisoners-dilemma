@@ -11,6 +11,11 @@ data/gold/*
 !data/bronze/.gitkeep
 !data/silver/.gitkeep
 !data/gold/.gitkeep
+# Bronze + silver (Parquet) versionnés : permettent de reconstruire le gold avec
+# dbt et de retrouver les chiffres du rapport SANS LM Studio ni 1h30 de calcul.
+# Le gold (gold.duckdb) reste ignoré : il est reconstruit par `dbt build`.
+!data/bronze/turns_raw.parquet
+!data/silver/turns.parquet
 
 # --- dbt ---
 dbt/target/

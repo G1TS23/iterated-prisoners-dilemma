@@ -15,6 +15,8 @@ echo "pre-commit :"
 # 1. Ne jamais committer le data lake ni les secrets
 while IFS= read -r f; do
   case "$f" in
+    # exceptions versionnées volontairement (reconstruction du gold sans LM Studio)
+    data/bronze/turns_raw.parquet|data/silver/turns.parquet) : ;;
     data/*/*)
       [ "$(basename "$f")" != ".gitkeep" ] && say "fichier du data lake stagé : $f" ;;
     .env|*/.env)
