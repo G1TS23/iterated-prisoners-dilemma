@@ -18,7 +18,7 @@ dilemme du prisonnier itératif : stratégies codées + agents IA locaux
 - [3. Setup complet](#3-setup-complet)
 - [4. Décisions du projet](#4-décisions-du-projet)
 - [5. Livrables](#5-livrables)
-- [6. Résultats](#6-résultats--run-du-11092026)
+- [6. Résultats](#6-résultats--run-du-25092026-5-répétitionspaire)
 - [7. Limites méthodologiques](#7-limites-méthodologiques)
 
 ## 1. Méthodologie
@@ -185,88 +185,92 @@ overnight comme sur Trivial Pursuit.
 2. Architecture bronze/silver/gold — ce dépôt.
 3. Analyse finale Streamlit — `dashboard/streamlit_app.py`.
 
-## 6. Résultats — run du 11/09/2026
+## 6. Résultats — run du 25/09/2026 (5 répétitions/paire)
 
-**Config** : 36 matches (round-robin + auto-confrontation, 8 agents) × 100
-tours = 7200 tours, 14 400 lignes en gold (2/tour). Run complet en 22 min 29 s.
+**Config** : 180 matches (36 paires × `N_REPEATS=5`, résumable — les 36 parties
+`r1` du run du 11/09 ont été réutilisées, seules `r2`-`r5` ont été générées) ×
+100 tours = 36 000 lignes en gold. Run des 144 nouveaux matches en 1h13.
 `temperature=0.2`, seed fixe.
 
-### Classement (`marts.agg_agent_leaderboard`)
+> Ce run **remplace** celui du 11/09 (une seule répétition), qui souffrait
+> justement du problème signalé dans ses propres limites : un classement serré
+> issu d'un seul tirage par paire ne se tient pas. Deux agents changent de
+> rang une fois le bruit moyenné — voir l'encart ci-dessous.
 
-| agent | type | score moyen/tour | coopération | pardon | riposte |
-|---|---|---:|---:|---:|---:|
-| grim_trigger | codé | **2,77** | 78,3 % | 0 % | 100 % |
-| tit_for_tat | codé | 2,68 | 83,0 % | 0 % | 100 % |
-| persona_empathique | IA | 2,54 | 99,1 % | 95,8 % | 4,2 % |
-| always_cooperate | codé | 2,49 | 100 % | 100 % | 0 % |
-| persona_calculateur | IA | 2,43 | 83,1 % | 35,8 % | 64,2 % |
-| always_defect | codé | 2,39 | 0 % | 0 % | 100 % |
-| persona_rancunier | IA | 2,29 | 53,8 % | 19,2 % | 80,8 % |
-| random | codé | 2,17 | 49,6 % | 51,1 % | 48,9 % |
+### Classement (`marts.agg_agent_leaderboard`, moyenne des 5 répétitions)
 
-**Constat n°1 — résultat d'Axelrod reproduit.** Les deux stratégies « nice but
-firm » (coopératives par défaut, mais qui ne se laissent jamais exploiter
-deux fois) dominent : `grim_trigger` et `tit_for_tat` terminent 1ʳᵉ et 2ᵉ,
-devant `always_cooperate` (exploitée sans jamais se venger) et `always_defect`
-(punie par tout le monde après le premier tour). C'est exactement le résultat
+| agent | type | score moyen/tour | coopération | pardon | riposte | écart-type inter-répétitions |
+|---|---|---:|---:|---:|---:|---:|
+| grim_trigger | codé | **2,70** | 73,8 % | 0 % | 100 % | 0,08 |
+| persona_calculateur | IA | 2,60 | 87,4 % | 33,3 % | 66,7 % | 0,09 |
+| tit_for_tat | codé | 2,58 | 77,6 % | 0 % | 100 % | 0,11 |
+| persona_empathique | IA | 2,51 | 99,3 % | 95,8 % | 4,2 % | 0,02 |
+| always_cooperate | codé | 2,51 | 100 % | 100 % | 0 % | 0,01 |
+| persona_rancunier | IA | 2,43 | 66,7 % | 18,8 % | 81,2 % | 0,14 |
+| always_defect | codé | 2,40 | 0 % | 0 % | 100 % | 0,04 |
+| random | codé | 2,15 | 50,2 % | 49,6 % | 50,4 % | 0,03 |
+
+**Ce qui change avec 5 répétitions plutôt qu'1** : `persona_calculateur` passe
+de 5ᵉ à **2ᵉ**, il dépasse maintenant `tit_for_tat` — y compris son propre
+équivalent codé (2,60 contre 2,58, voir plus bas) ; `persona_rancunier` passe
+de 7ᵉ à 6ᵉ, il dépasse maintenant `always_defect`. Le podium (`grim_trigger`
+en tête) et le dernier (`random`) ne bougent pas — c'était donc déjà un signal
+solide au run précédent, contrairement au milieu de tableau. La colonne
+écart-type le confirme : `persona_rancunier` (0,14) et `tit_for_tat` (0,11)
+sont les plus dispersés d'une répétition à l'autre, `always_cooperate` (0,01)
+et `persona_empathique` (0,02) les plus stables (logique : moins de dépendance
+au hasard de l'adversaire quand on ne réagit presque jamais).
+
+**Constat n°1 — résultat d'Axelrod reproduit.** Les stratégies « nice but
+firm » (coopératives par défaut, jamais exploitées deux fois) dominent le haut
+du classement : `grim_trigger`, `persona_calculateur` et `tit_for_tat`
+occupent le podium, devant `always_cooperate` (jamais vengée) et
+`always_defect` (punie par tout le monde après le premier tour). Résultat
 historique d'Axelrod (1981) reproduit 40 ans plus tard, IA comprise.
 
-**Constat n°2 — le meilleur agent IA (`persona_empathique`) bat deux
-stratégies codées classiques**, `always_cooperate` et `always_defect` — la
-coopération générale « avec pardon sélectif » d'un LLM peut donc surpasser des
-règles fixes simples, sans les égaler face aux meilleures stratégies
-réactives strictes.
+**Constat n°2 — un persona IA imparfait bat son équivalent codé parfait.**
+`persona_calculateur` (2,60) devance `tit_for_tat` (2,58) alors qu'il rate
+33 % des ripostes que la règle stricte impose (voir fidélité plus bas). Sur ce
+tournoi précis, être un peu plus indulgent qu'un TFT strict a *mieux* payé
+que l'exécution mécanique de la règle — TFT strict est démonstrablement
+performant chez Axelrod, mais pas insurpassable par une variante plus
+généreuse sur cette composition d'adversaires. À vérifier sur un tournoi avec
+une composition d'agents différente avant de généraliser.
 
 ### Persona IA vs équivalent codé (`marts.agg_llm_vs_coded`)
 
 | persona | équivalent codé | score persona | score code | coop persona | coop code |
 |---|---|---:|---:|---:|---:|
-| persona_empathique | tit_for_tat | 2,54 | 2,68 | 99,1 % | 83,0 % |
-| persona_calculateur | tit_for_tat | 2,43 | 2,68 | 83,1 % | 83,0 % |
-| persona_rancunier | grim_trigger | 2,29 | 2,77 | 53,8 % | 78,3 % |
+| persona_calculateur | tit_for_tat | **2,60** | 2,58 | 87,4 % | 77,6 % |
+| persona_empathique | tit_for_tat | 2,51 | 2,58 | 99,3 % | 77,6 % |
+| persona_rancunier | grim_trigger | 2,43 | 2,70 | 66,7 % | 73,8 % |
 
-**Constat n°3 — aucune persona ne reproduit exactement son équivalent codé,
-et le verdict dépend du niveau de mesure.** On a deux lectures complémentaires :
-
-*Niveau résultat* (table ci-dessus) : `persona_rancunier` s'écarte le plus de
-`grim_trigger` (-0,48 pt/tour, 53,8 % de coopération contre 78,3 %).
-
-*Niveau décision* (`marts.agg_persona_fidelity` — on rejoue chaque décision de
-l'IA dans la règle codée avec le même historique) :
+### Fidélité par décision (`marts.agg_persona_fidelity`, rejeu de l'historique)
 
 | persona | équivalent | fidélité | riposte respectée* | coopération respectée** |
 |---|---|---:|---:|---:|
-| persona_rancunier | grim_trigger (stricte) | **91,4 %** | 84,7 % | 99,5 % |
-| persona_calculateur | tit_for_tat (stricte) | 90,3 % | **64,2 %** | 99,3 % |
-| persona_empathique | tit_for_tat (approchée) | 84,6 % | 4,2 % | 99,7 % |
+| persona_rancunier | grim_trigger (stricte) | **93,7 %** | 84,6 % | 99,6 % |
+| persona_calculateur | tit_for_tat (stricte) | 93,5 % | **66,7 %** | 99,5 % |
+| persona_empathique | tit_for_tat (approchée) | 84,2 % | 4,2 % | 99,9 % |
 
 \* part des tours où la règle impose de trahir et où le persona trahit bien.
 \*\* idem pour coopérer.
 
-**Ce que ça change à la lecture** (et corrige une première interprétation
-fondée uniquement sur les agrégats) :
-- Toutes les personas sont quasi parfaites sur ce qui est *facile* — coopérer
-  quand la règle l'exige (≥ 99 %). L'infidélité se concentre **entièrement sur
-  la riposte** : c'est la seule chose qu'un LLM 3B applique mal.
-- Décision par décision, `persona_rancunier` est en fait la **plus fidèle** (91 %),
-  et non la moins : elle n'échoue à ne pas pardonner que dans ~15 % des tours
-  où la règle l'impose (pire face à `always_defect` : 75 % de fidélité —
-  elle recoopère face à un adversaire qui n'a jamais coopéré).
-- `persona_calculateur`, censé être un donnant-donnant strict, est celui qui
-  **rate le plus la riposte** (36 % des trahisons non sanctionnées).
-- `persona_empathique` n'est pas une imitation ratée de TFT : c'est une variante
-  volontairement généreuse (riposte 4 %, pardon 96 %), et elle est la meilleure IA.
-- Pourquoi le rancunier perd-il autant en score (-0,48) avec seulement ~15 %
-  d'écart de décision ? **Hypothèse non vérifiée causalement** : la règle grim est
-  *absorbante* — un seul pardon à tort change la suite de la partie — donc de
-  petites erreurs de décision s'amplifient en grosses erreurs de trajectoire.
+**Constat n°3 — confirmé avec 5x plus de données : la seule chose qu'un LLM
+3B applique mal, c'est la riposte.** Coopérer quand il le faut : ≥ 99,5 % pour
+les 3 personas. Trahir quand il le faut : 66,7 % (calculateur) à 84,6 %
+(rancunier) — c'est tout l'écart de fidélité. `persona_calculateur`, censé
+être le plus strict des trois, reste celui qui rate le plus la riposte, et
+c'est *justement* cette indulgence excédentaire qui lui fait battre son propre
+équivalent codé au score (constat n°2) — fidélité imparfaite ne veut pas dire
+performance dégradée.
 
 **Réciprocité** (`marts.agg_reciprocity`, corrélation entre mon coup au tour t
-et le coup adverse au tour t-1) : `tit_for_tat` 1,00 · `grim_trigger` 0,84 ·
-`persona_calculateur` 0,74 · `persona_rancunier` 0,59 · `persona_empathique` 0,17 ·
-`random` −0,03 (les agents à comportement constant n'ont pas de corrélation
-définie). Lecture : les personas IA sont **réactives mais moins mécaniquement**
-que les règles codées, dans l'ordre attendu (calculateur > rancunier > empathique).
+et le coup adverse au tour t-1) : `tit_for_tat` 1,00 · `grim_trigger` 0,85 ·
+`persona_calculateur` 0,77 · `persona_rancunier` 0,69 · `persona_empathique`
+0,18 · `random` 0,01. Stable par rapport au run précédent — les personas IA
+sont réactives mais moins mécaniquement que les règles codées, dans l'ordre
+attendu (calculateur > rancunier > empathique).
 
 **Limite observée** : le schéma de sortie structurée autorise un champ
 `justification` optionnel, quasiment jamais rempli spontanément par le modèle
@@ -274,74 +278,92 @@ que les règles codées, dans l'ordre attendu (calculateur > rancunier > empathi
 explicite de ces incohérences. Piste pour une itération suivante : rendre
 `justification` obligatoire dans le schéma.
 
-**Fiabilité du parsing** : `is_parsable = 100 %` sur les 2700 réponses IA
-(900 par persona) — la sortie structurée LM Studio n'a jamais nécessité de
-repli en texte libre sur ce run (contrairement à `phi-3.5-mini-instruct` dans
-le projet Trivial Pursuit).
+**Fiabilité du parsing** : `is_parsable = 100 %` sur les 13 500 réponses IA
+(4500 par persona) — la sortie structurée LM Studio n'a jamais nécessité de
+repli en texte libre sur ces deux runs (contrairement à `phi-3.5-mini-instruct`
+dans le projet Trivial Pursuit).
 
 ### Comportement émergent / équilibre de Nash (`marts.agg_cooperation_over_time`)
 
-Taux de coopération sur les 10 premiers tours vs les 10 derniers :
+Taux de coopération sur les 10 premiers tours vs les 10 derniers (moyenne des
+5 répétitions) :
 
 | agent | type | début | fin | tendance |
 |---|---|---:|---:|---|
-| persona_empathique | IA | 95,6 % | **98,9 %** | converge vers la coopération totale |
-| tit_for_tat | codé | 84,4 % | 85,6 % | stable, équilibre coopératif |
-| random | codé | 51,1 % | 54,4 % | stable (bruit) |
-| grim_trigger | codé | 83,3 % | 77,8 % | légère érosion |
-| persona_calculateur | IA | 91,1 % | 82,2 % | dérive vers plus de trahison |
-| persona_rancunier | IA | 60,0 % | 52,2 % | dérive vers plus de trahison |
+| persona_empathique | IA | 97,8 % | **99,3 %** | converge vers la coopération totale |
+| random | codé | 49,3 % | 53,1 % | stable (bruit) |
+| persona_rancunier | IA | 69,3 % | 69,1 % | **stable** (pas de dérive avec plus de données) |
+| tit_for_tat | codé | 80,2 % | 77,8 % | légère érosion |
+| grim_trigger | codé | 77,6 % | 73,3 % | légère érosion |
+| persona_calculateur | IA | 92,4 % | 88,4 % | légère érosion |
 
-L'horizon est fini et connu (100 tours) : la théorie des jeux prédit par
-récurrence à rebours que la trahison mutuelle est l'équilibre de Nash. On
-observe les deux issues en parallèle sur le même tournoi : `persona_empathique`
-et `tit_for_tat` **convergent vers un équilibre coopératif stable** (comme
-dans l'expérience d'Axelrod), tandis que `persona_calculateur` et
-`persona_rancunier` **dérivent vers la prédiction théorique** (plus de
-trahison en fin de partie) — sans jamais l'atteindre complètement. Aucun
-agent codé ni IA ne bascule dans la trahison systématique prédite par la
-récurrence à rebours pure.
+**Ce qui change avec 5 répétitions** : au run précédent, `persona_calculateur`
+et `persona_rancunier` semblaient « dériver vers plus de trahison » (-9 et
+-8 points). Avec 5x plus de données, `persona_rancunier` est en réalité
+**stable** (-0,2 point, dans le bruit) et `persona_calculateur` dérive
+beaucoup moins qu'il n'y paraissait (-4 points contre -9). Seul
+`persona_empathique` montre une tendance nette et reproductible (convergence
+vers la coopération quasi totale). **Conclusion révisée** : l'horizon fini
+connu (100 tours) ne produit pas de dérive marquée vers la trahison chez la
+plupart des agents réactifs — la lecture « équilibre de Nash en approche »
+du run à 1 répétition était en bonne partie un artefact du bruit
+d'échantillonnage. Seuls `tit_for_tat` et `grim_trigger` montrent une érosion
+légère mais cohérente sur les deux runs.
 
 ### Conclusion générale
 
 1. **Le résultat d'Axelrod se reproduit** : les stratégies réactives et
-   fermes (`grim_trigger`, `tit_for_tat`) dominent le tournoi, 40 ans après
-   l'expérience originale.
-2. **L'IA peut égaler des règles simples sans les dépasser** : le meilleur
-   agent IA bat 2 stratégies codées basiques mais reste loin des meilleures
-   stratégies réactives strictes.
+   fermes (`grim_trigger`, `tit_for_tat`, et leur approximation IA
+   `persona_calculateur`) occupent le podium, 40 ans après l'expérience
+   originale.
+2. **Un persona IA peut battre son propre équivalent codé** :
+   `persona_calculateur` dépasse `tit_for_tat` au score malgré une riposte
+   moins systématique — sur ce tournoi précis, un peu d'indulgence excédentaire
+   a mieux payé que l'exécution mécanique de la règle.
 3. **Les personas en langage naturel approximent leur règle sans l'appliquer
-   mécaniquement — et c'est la *riposte* qui leur échappe** : ≥ 99 % de
-   fidélité pour coopérer quand il le faut, mais 64 % (calculateur) à 85 %
-   (rancunier) pour sanctionner quand il le faut. C'est la mesure directe du
-   « système d'évaluation des prompts » demandé par le sujet (`agg_persona_fidelity`).
-4. **Le comportement émergent diverge selon l'agent** : certains convergent
-   vers la coopération stable (comme Axelrod), d'autres dérivent vers la
-   prédiction théorique de trahison — sur le même tournoi, les deux
-   dynamiques coexistent.
+   mécaniquement — et c'est la *riposte* qui leur échappe**, de façon stable
+   sur les deux runs : ≥ 99,5 % de fidélité pour coopérer quand il le faut,
+   mais 66,7 % (calculateur) à 84,6 % (rancunier) pour sanctionner. C'est la
+   mesure directe du « système d'évaluation des prompts » demandé par le sujet
+   (`agg_persona_fidelity`).
+4. **La plupart des dynamiques « émergentes » observées à 1 répétition ne
+   résistent pas à la réplication** : la dérive vers la trahison de
+   `persona_rancunier` disparaît avec plus de données (bruit
+   d'échantillonnage), celle de `persona_calculateur` se réduit de moitié.
+   Seule la convergence de `persona_empathique` vers la coopération quasi
+   totale est confirmée. Leçon méthodologique du projet autant que résultat :
+   sur un tournoi stochastique, **répéter change la lecture**, pas seulement
+   sa précision.
 
 ## 7. Limites méthodologiques
 
-- **1 partie par paire** (`N_REPEATS=1`) : aucune barre d'erreur. Les paires
-  impliquant `random` ou un LLM (température 0,2) sont stochastiques — un
-  classement serré (ex. `persona_calculateur` 2,43 vs `always_defect` 2,39) ne
-  doit pas être sur-interprété. Piste : `N_REPEATS≥5` et intervalles de confiance.
+- **`N_REPEATS=5`** : résout la limite du 1er run (1 seule partie/paire), mais
+  reste petit pour une vraie barre d'erreur (5 tirages ≠ intervalle de
+  confiance rigoureux). L'écart-type inter-répétitions (colonne du classement
+  §6) sert de garde-fou informel : `persona_rancunier` et `tit_for_tat` restent
+  les plus dispersés, à lire avec prudence sur un classement serré.
 - **Un seul modèle (3B, Q4)** incarne les 3 personas : on mesure l'effet du
   *prompt*, pas celui du modèle. Ce que fait un modèle plus gros reste ouvert.
 - **Réciprocité ↔ score calculée sur 6 agents** seulement : indicatif, pas
   une corrélation statistiquement exploitable.
+- **Un seul run à `N_REPEATS=5`** : on n'a pas répété *le run lui-même* (pas de
+  "répétition des répétitions") — la disparition de la dérive de
+  `persona_rancunier` entre les deux runs est cohérente avec du bruit qui se
+  moyenne, mais n'est pas prouvée formellement (pas de test statistique).
 - **`justification` quasi jamais remplie** : le schéma JSON la laisse optionnelle,
   le modèle ne renvoie que `{"move": ...}` — on n'a pas le raisonnement derrière
   les incohérences. Piste : la rendre obligatoire.
 - **Comptage `n_matches` du classement** : un match d'auto-confrontation compte
   pour 1 match mais ses deux sièges contribuent aux tours de l'agent (d'où
-  900 tours joués pour 8 matches ; toutes les métriques sont calculées au
-  niveau ligne, donc non affectées).
+  4500 tours joués pour 40 matches à `N_REPEATS=5` ; toutes les métriques sont
+  calculées au niveau ligne, donc non affectées).
 - **Fidélité mesurée sur les équivalents `stricte` seulement** pour être
   interprétable ; `random` n'a pas de « coup attendu » déterministe.
 - **Horizon non communiqué** : les agents IA ne savent pas combien de tours
   restent — l'effet d'horizon (trahison de fin de partie) n'est donc pas testé.
-- **Artefact de prompt au 1er tour du run publié** : `memory.py` écrivait
-  littéralement « Tour 1/N » (placeholder jamais remplacé). Corrigé dans le
-  code après le run ; les données publiées ont été générées avec l'ancien
-  libellé. Ne concerne que le 1er tour de chaque partie IA ; effet non mesuré.
+- **Artefact de prompt au 1er tour** : `memory.py` écrivait littéralement
+  « Tour 1/N » (placeholder jamais remplacé) sur le run du 11/09 (repris tel
+  quel pour les parties `r1` réutilisées dans le run du 25/09 ; les parties
+  `r2`-`r5`, elles, utilisent le libellé corrigé). Ne concerne que le 1er tour
+  de chaque partie IA ; effet non mesuré, mais rend les 5 répétitions d'une
+  même paire légèrement hétérogènes sur ce détail précis.
