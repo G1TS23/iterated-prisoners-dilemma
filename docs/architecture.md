@@ -3,14 +3,14 @@
 ## Pipeline de bout en bout
 
 ```
-   config/personas.yaml            src/strategies.py
-   (3 personas IA + équivalent      (5 stratégies codées)
-    codé + prompt)                          │
-            │                               │
-            ▼                               ▼
-        LLMAgent  ◄── src/memory.py     CodedAgent
+   config/personas.yaml                 src/strategies.py
+   (3 personas IA + équivalent        (5 stratégies codées)
+    codé + prompt)                               │
+            │                                    │
+            ▼                                    ▼
+        LLMAgent  ◄── src/memory.py       CodedAgent
    (persona + résumé compact)            (règle pure)
-            │  src/llm_client.py                │
+            │  src/llm_client.py                 │
             ▼                                    │
    LM Studio (:1234, sortie                      │
    structurée {"move": C|D})                     │
@@ -20,28 +20,28 @@
                            │   8 agents -> 36 matches x N_TURNS, résumable)
                            ▼
 ┌────────────────────────────────────────────────┐
-│ BRONZE   data/bronze/turns_raw.parquet          │  brut, 1 ligne = match x tour x siège
+│ BRONZE   data/bronze/turns_raw.parquet         │  brut, 1 ligne = match x tour x siège
 └────────────────────────────────────────────────┘
                            │  src/clean_silver.py  (colonnes dérivées causales :
                            │   score cumulé, coop rate glissant, streak,
                            │   pardon/riposte, round_outcome)
                            ▼
 ┌────────────────────────────────────────────────┐
-│ SILVER   data/silver/turns.parquet              │  observations enrichies
+│ SILVER   data/silver/turns.parquet             │  observations enrichies
 └────────────────────────────────────────────────┘
                            │  dbt build  (dbt-duckdb)  +  seed agent_meta.csv
                            ▼
 ┌────────────────────────────────────────────────┐
-│ GOLD     data/gold/gold.duckdb                  │  1 table = 1 question métier
-│   staging.stg_turns                             │
-│   marts.fct_turns            (faits)            │
-│   marts.dim_agent            (dimension)        │
-│   marts.agg_agent_leaderboard                   │  qui gagne ?
-│   marts.agg_matchup_matrix                      │  qui bat qui ?
-│   marts.agg_cooperation_over_time               │  convergence / équilibre ?
-│   marts.agg_reciprocity                         │  corrélation coup t / coup adverse t-1
-│   marts.agg_llm_vs_coded                        │  persona vs équivalent codé (agrégats)
-│   marts.agg_persona_fidelity(_by_opponent)      │  évaluation des prompts, tour par tour
+│ GOLD     data/gold/gold.duckdb                 │  1 table = 1 question métier
+│   staging.stg_turns                            │
+│   marts.fct_turns            (faits)           │
+│   marts.dim_agent            (dimension)       │
+│   marts.agg_agent_leaderboard                  │  qui gagne ?
+│   marts.agg_matchup_matrix                     │  qui bat qui ?
+│   marts.agg_cooperation_over_time              │  convergence / équilibre ?
+│   marts.agg_reciprocity                        │  corrélation coup t / coup adverse t-1
+│   marts.agg_llm_vs_coded                       │  persona vs équivalent codé (agrégats)
+│   marts.agg_persona_fidelity(_by_opponent)     │  évaluation des prompts, tour par tour
 └────────────────────────────────────────────────┘
                            │  lecture seule
                            ▼
