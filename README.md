@@ -1,13 +1,92 @@
 # Le dilemme du prisonnier itératif — tournoi Axelrod, IA comprise
 
+[![quickstart](https://github.com/G1TS23/iterated-prisoners-dilemma/actions/workflows/quickstart.yml/badge.svg)](https://github.com/G1TS23/iterated-prisoners-dilemma/actions/workflows/quickstart.yml)
+
 Projet **M2 DEV — EFREI**. Pipeline ETL complet autour d'une simulation du
 dilemme du prisonnier itératif : stratégies codées + agents IA locaux
 (LM Studio), architecture médaillon, gold via dbt, dashboard Streamlit.
 
 > Sujet complet : [`docs/SUJET.md`](docs/SUJET.md).
 
+## Démarrage rapide (sans LM Studio)
+
+Le dépôt **embarque les données** : le bronze et le silver Parquet (180 matches, 36 000 lignes, 0,3 Mo). `dbt build` reconstruit donc la
+couche gold (tests inclus) et le dashboard affiche exactement les résultats du
+rapport — **sans LM Studio ni calcul long**. Durée : environ 5 minutes.
+
+**Prérequis** : Git et Python 3.12, 3.13 ou 3.14 (testé en intégration continue sur
+Windows et Linux ; macOS en 3.13 — voir le badge ci-dessus). Rien d'autre à installer.
+
+### Windows (PowerShell)
+
+```powershell
+git clone https://github.com/G1TS23/iterated-prisoners-dilemma.git
+cd iterated-prisoners-dilemma
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+cd dbt
+dbt build
+cd ..
+streamlit run dashboard/streamlit_app.py
+```
+
+- Si PowerShell refuse `Activate.ps1` (« l'exécution de scripts est désactivée ») :
+  `Set-ExecutionPolicy -Scope Process Bypass`, puis relancer l'activation.
+  Dans `cmd.exe` : `.venv\Scripts\activate.bat`.
+- Sans activer le venv : `.\.venv\Scripts\pip install -r requirements.txt`,
+  `.\.venv\Scripts\dbt build`, `.\.venv\Scripts\streamlit run dashboard/streamlit_app.py`.
+- Si la commande `py` n'existe pas (Python du Microsoft Store) : remplacer `py -3` par `python`.
+- Accents illisibles dans la console : `$env:PYTHONUTF8 = "1"`.
+- **`make` n'est pas nécessaire** (il n'existe pas sous Windows natif) : voir le tableau d'équivalence ci-dessous.
+
+### macOS / Linux / WSL
+
+```bash
+git clone https://github.com/G1TS23/iterated-prisoners-dilemma.git && cd iterated-prisoners-dilemma
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+(cd dbt && dbt build)
+streamlit run dashboard/streamlit_app.py
+```
+
+Ou, avec `make` : `make install PYTHON=python3 && make build && make dashboard`.
+Sous **WSL**, travaille dans le système de fichiers Linux (`~/...`) plutôt que sous
+`/mnt/c/...` (beaucoup plus lent). Le dashboard s'ouvre normalement dans le navigateur
+Windows sur http://localhost:8501.
+
+### Résultat attendu
+
+- `dbt build` se termine par `Done. PASS=24 WARN=0 ERROR=0`.
+- Streamlit sert http://localhost:8501 : **7 onglets** ; l'onglet « Classement »
+  place `grim_trigger` en tête avec **2,70** pt/tour.
+- Vérification automatique, sans navigateur : `python tests/smoke_dashboard.py`
+  → `OK : dashboard rendu sans erreur`.
+
+Le bronze/silver livrés sont ceux du **run publié** (180 matches = 36 paires × `N_REPEATS=5`, 100 tours). Avec les défauts, `make simulate` retrouve ces 180 matches déjà présents et n'a rien à refaire. Pour tester la simulation **sans toucher aux données livrées** : `python src/simulate.py --no-llm --n-turns 5 --max-matches 3 --output data/bronze/smoke_test.parquet` (fichier ignoré par git).
+
+### Équivalence `make` ↔ commandes
+
+| `make …` | Commande brute |
+|---|---|
+| `make install` | `python -m venv .venv`, activer, `pip install -r requirements.txt` |
+| `make build` | `cd dbt` puis `dbt build` |
+| `make dashboard` | `streamlit run dashboard/streamlit_app.py` |
+| `make simulate` | `python src/simulate.py` (LM Studio requis ; `--no-llm` pour les stratégies codées seules) |
+| `make clean-silver` | `python src/clean_silver.py` |
+
+### Dépannage rapide
+
+- `dbt : commande introuvable` → le venv n'est pas activé.
+- `Could not set lock on file ... gold.duckdb` → un dashboard est encore ouvert : le fermer,
+  puis relancer `dbt build` (DuckDB n'admet qu'un seul écrivain).
+- Port 8501 occupé : `streamlit run dashboard/streamlit_app.py --server.port 8502`.
+
+Pour **refaire tourner la génération** des données (LM Studio, plusieurs heures) : § 3 « Setup complet ».
+
 ## Sommaire
 
+- [Démarrage rapide (sans LM Studio)](#démarrage-rapide-sans-lm-studio)
 - [1. Méthodologie](#1-méthodologie)
   - [Le jeu](#le-jeu)
   - [Architecture en médaillon](#architecture-en-médaillon)
@@ -126,7 +205,8 @@ Makefile                     orchestration : make all
 
 ### Pré-requis
 
-- **Python 3.13** (dbt-core ne supporte pas encore 3.14)
+- **Python 3.12 – 3.14** (vérifié en CI ; développé en 3.13). Avec `make`, `PYTHON` vaut `python3.13`
+  par défaut : `make install PYTHON=python3` si cette commande n'existe pas.
 - **LM Studio** — https://lmstudio.ai, avec le modèle voulu déjà téléchargé
   (`lms get ...`) et le serveur démarré (`lms server start`)
 
@@ -135,7 +215,7 @@ Makefile                     orchestration : make all
 ```bash
 git clone <url> && cd iterated-prisoners-dilemma
 cp .env.example .env          # ajuster LLM_MODELS si besoin
-make install                  # venv + pip + dbt deps + hook pre-commit
+make install                  # venv + pip + hook pre-commit
 ```
 
 ### Exécution
@@ -153,12 +233,16 @@ Avec IA sur un sous-ensemble : `make simulate ARGS="--n-turns 15 --max-matches 5
 
 ### Budget de calcul
 
-21 des 36 matches impliquent au moins un agent IA (15 IA-vs-codé, 6 IA-vs-IA
-dont 3 auto-confrontations). À `N_TURNS=100` : ~21 × 100 × ~1,5 appel LLM
-moyen ≈ 3000 appels — de l'ordre de 20-30 min sur un petit modèle 2-3B en
-local (mesuré : ~10 s/match à `N_TURNS=15`, donc ~1 min/match à 100 tours en
-extrapolation prudente). Gérable en une session, pas besoin de `caffeinate`
-overnight comme sur Trivial Pursuit.
+21 des 36 paires impliquent au moins un agent IA (15 IA-vs-codé, 6 IA-vs-IA
+dont 3 auto-confrontations) ; les 15 autres sont instantanées. Durées **mesurées**
+sur un petit modèle 3B en local, `N_TURNS=100` :
+
+| exécution | matches | durée |
+|---|---:|---:|
+| `N_REPEATS=1` | 36 | 22 min 29 s |
+| répétitions 2 à 5 (`N_REPEATS=5`) | +144 | 1 h 13 |
+
+Gérable en une session (pas besoin de laisser tourner la nuit comme sur Trivial Pursuit).
 
 ## 4. Décisions du projet
 
@@ -370,6 +454,11 @@ légère mais cohérente sur les deux runs.
   confiance rigoureux). L'écart-type inter-répétitions (colonne du classement
   §6) sert de garde-fou informel : `persona_rancunier` et `tit_for_tat` restent
   les plus dispersés, à lire avec prudence sur un classement serré.
+- **Graine de la stratégie `random` non reproductible sur les données publiées** :
+  la version qui a généré le bronze dérivait la graine de `hash()`, randomisé à chaque
+  exécution par Python (`PYTHONHASHSEED`). Corrigé ensuite (`zlib.crc32`), mais les
+  données livrées ne sont pas rejouables à l'identique pour `random` ; les agents IA
+  restent de toute façon non déterministes (température 0,2).
 - **Un seul modèle (3B, Q4)** incarne les 3 personas : on mesure l'effet du
   *prompt*, pas celui du modèle. Ce que fait un modèle plus gros reste ouvert.
 - **Réciprocité ↔ score calculée sur 6 agents** seulement : indicatif, pas
