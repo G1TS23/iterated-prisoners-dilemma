@@ -61,7 +61,7 @@ with tab1:
             "taux_pardon": "{:.1%}", "taux_riposte": "{:.1%}",
             "temps_moyen_reponse_s": "{:.2f} s",
         }),
-        use_container_width=True,
+        width="stretch",
     )
     st.altair_chart(
         alt.Chart(lb).mark_bar().encode(
@@ -71,7 +71,7 @@ with tab1:
             tooltip=["agent", alt.Tooltip("score_moyen_par_tour", format=".2f"),
                      alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=380),
-        use_container_width=True,
+        width="stretch",
     )
 
 with tab2:
@@ -85,7 +85,7 @@ with tab2:
             tooltip=["player", "opponent", alt.Tooltip("score_moyen_par_tour", format=".2f"),
                      alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=420),
-        use_container_width=True,
+        width="stretch",
     )
 
 with tab3:
@@ -100,7 +100,7 @@ with tab3:
             strokeDash=alt.StrokeDash("agent_type:N", title="Type"),
             tooltip=["agent", "turn", alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=420).interactive(),
-        use_container_width=True,
+        width="stretch",
     )
     st.caption("Une courbe qui se stabilise proche de 100 % = équilibre coopératif "
                "émergent ; proche de 0 % = escalade vers la trahison mutuelle.")
@@ -118,7 +118,7 @@ with tab_corr:
             tooltip=["agent", alt.Tooltip("reciprocite", format=".2f"),
                      alt.Tooltip("score_moyen_par_tour", format=".2f")],
         ).properties(height=320),
-        use_container_width=True,
+        width="stretch",
     )
     st.subheader("Réciprocité vs score")
     st.altair_chart(
@@ -129,7 +129,7 @@ with tab_corr:
             tooltip=["agent", alt.Tooltip("reciprocite", format=".2f"),
                      alt.Tooltip("score_moyen_par_tour", format=".2f")],
         ).properties(height=340),
-        use_container_width=True,
+        width="stretch",
     )
     if len(rc) >= 3:
         r = rc["reciprocite"].corr(rc["score_moyen_par_tour"])
@@ -150,7 +150,7 @@ with tab4:
             "riposte_persona": "{:.1%}", "riposte_code": "{:.1%}",
             "temps_moyen_reponse_s": "{:.2f} s",
         }),
-        use_container_width=True,
+        width="stretch",
     )
     melt = disp.melt(id_vars=["persona"], value_vars=["coop_persona", "coop_code"],
                      var_name="source", value_name="taux_cooperation")
@@ -164,7 +164,7 @@ with tab4:
                                             range=["#4C78A8", "#B0B0B0"])),
             tooltip=["persona", "source", alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=340),
-        use_container_width=True,
+        width="stretch",
     )
 
     st.subheader("Évaluation des prompts : fidélité tour par tour")
@@ -174,7 +174,7 @@ with tab4:
     st.dataframe(
         fidelity.style.format({"fidelite": "{:.1%}", "riposte_attendue_respectee": "{:.1%}",
                                "cooperation_attendue_respectee": "{:.1%}", "taux_parsable": "{:.1%}"}),
-        use_container_width=True,
+        width="stretch",
     )
     fo = fidelity_opp.dropna(subset=["fidelite"])
     st.altair_chart(
@@ -184,7 +184,7 @@ with tab4:
             color=alt.Color("fidelite:Q", title="Fidélité", scale=alt.Scale(scheme="redyellowgreen", domain=[0.5, 1])),
             tooltip=["persona", "opponent", alt.Tooltip("fidelite", format=".1%")],
         ).properties(height=200, title="Fidélité par adversaire (où le persona décroche de sa règle)"),
-        use_container_width=True,
+        width="stretch",
     )
 
 with tab5:
@@ -203,7 +203,7 @@ with tab5:
             show_cols = ["turn", "move", "opponent_move", "payoff", "own_cum_score", "round_outcome"]
             if pm.player_type.iloc[0] == "llm":
                 show_cols.append("raw_output")
-            st.dataframe(pm[show_cols], use_container_width=True, height=360)
+            st.dataframe(pm[show_cols], width="stretch", height=360)
 
 with tab_interp:
     best = leaderboard.sort_values("score_moyen_par_tour", ascending=False).iloc[0]
