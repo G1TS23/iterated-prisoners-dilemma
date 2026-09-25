@@ -22,7 +22,9 @@ import itertools
 import os
 import random
 import uuid
+import zlib
 from datetime import datetime, timezone
+from pathlib import Path
 
 import polars as pl
 from tqdm import tqdm
@@ -83,10 +85,10 @@ def play_match(agent_a, agent_b, n_turns: int, rng: random.Random,
     return rows
 
 
-def existing_match_ids() -> set[str]:
-    if not BRONZE_TURNS.exists():
+def existing_match_ids(path: Path) -> set[str]:
+    if not path.exists():
         return set()
-    return set(pl.read_parquet(BRONZE_TURNS, columns=["match_id"])["match_id"])
+    return set(pl.read_parquet(path, columns=["match_id"])["match_id"])
 
 
 def main() -> None:
@@ -99,6 +101,10 @@ def main() -> None:
                     help="Modèle LM Studio pour les 3 personas (défaut : 1er de $LLM_MODELS).")
     ap.add_argument("--host", default=os.environ.get("LMSTUDIO_HOST", "http://localhost:1234"))
     ap.add_argument("--max-matches", type=int, default=None, help="Plafond (smoke test).")
+    ap.add_argument("--output", type=Path, default=BRONZE_TURNS,
+                    help="Fichier bronze de sortie (défaut : data/bronze/turns_raw.parquet, "
+                         "LIVRÉ dans le dépôt). Pour un test, écrire ailleurs afin de ne pas "
+                         "contaminer les données publiées.")
     args = ap.parse_args()
 
     ensure_dirs()
@@ -120,7 +126,9 @@ def main() -> None:
     matches = [(a, b, r) for a, b in pairs for r in range(1, args.n_repeats + 1)]
     if args.max_matches:
         matches = matches[: args.max_matches]
-    done = existing_match_ids()
+    out_path: Path = args.output
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    done = existing_match_ids(out_path)
     run_id = uuid.uuid4().hex[:12]
     print(f"matches  : {len(matches)} (round-robin + auto-confrontation, "
           f"{args.n_repeats} répétition(s)) — {args.n_turns} tours chacun")
@@ -133,12 +141,14 @@ def main() -> None:
         match_id = f"{a.name}__vs__{b.name}__t{args.n_turns}__r{repeat}"
         if match_id in done:
             continue
-        rng = random.Random(hash((seed, match_id)) & 0xFFFFFFFF)
+        # crc32 et non hash() : hash() d'une str est randomisé à chaque processus
+        # (PYTHONHASHSEED), ce qui rendait la stratégie `random` non reproductible.
+        rng = random.Random(zlib.crc32(f"{seed}:{match_id}".encode()))
         rows = play_match(a, b, args.n_turns, rng, match_id, repeat, run_id)
         new_df = pl.DataFrame(rows)
-        if BRONZE_TURNS.exists():
-            new_df = pl.concat([pl.read_parquet(BRONZE_TURNS), new_df], how="diagonal_relaxed")
-        new_df.write_parquet(BRONZE_TURNS)
+        if out_path.exists():
+            new_df = pl.concat([pl.read_parquet(out_path), new_df], how="diagonal_relaxed")
+        new_df.write_parquet(out_path)
         done.add(match_id)
 
     print("terminé.")
