@@ -18,6 +18,10 @@ from packaging.version import Version
 
 GOLD_DB = Path(__file__).resolve().parents[1] / "data" / "gold" / "gold.duckdb"
 
+FIELD_AGENT = "agent:N"
+FIELD_SCORE_PAR_TOUR = "score_moyen_par_tour:Q"
+FIELD_AGENT_TYPE = "agent_type:N"
+
 st.set_page_config(page_title="Dilemme du prisonnier itératif", layout="wide")
 
 # --- Compatibilité Streamlit : "pleine largeur" -------------------------------
@@ -92,9 +96,9 @@ with tab1:
     )
     st.altair_chart(
         alt.Chart(lb).mark_bar().encode(
-            x=alt.X("agent:N", sort="-y", title=None),
-            y=alt.Y("score_moyen_par_tour:Q", title="Score moyen / tour"),
-            color=alt.Color("agent_type:N", title="Type"),
+            x=alt.X(FIELD_AGENT, sort="-y", title=None),
+            y=alt.Y(FIELD_SCORE_PAR_TOUR, title="Score moyen / tour"),
+            color=alt.Color(FIELD_AGENT_TYPE, title="Type"),
             tooltip=["agent", alt.Tooltip("score_moyen_par_tour", format=".2f"),
                      alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=380),
@@ -107,7 +111,7 @@ with tab2:
         alt.Chart(matrix).mark_rect().encode(
             x=alt.X("opponent:N", title=None, axis=alt.Axis(labelAngle=-40)),
             y=alt.Y("player:N", title=None),
-            color=alt.Color("score_moyen_par_tour:Q", title="Score moyen",
+            color=alt.Color(FIELD_SCORE_PAR_TOUR, title="Score moyen",
                             scale=alt.Scale(scheme="blues")),
             tooltip=["player", "opponent", alt.Tooltip("score_moyen_par_tour", format=".2f"),
                      alt.Tooltip("taux_cooperation", format=".1%")],
@@ -123,8 +127,8 @@ with tab3:
         alt.Chart(ct).mark_line(point=False).encode(
             x=alt.X("turn:Q", title="Tour"),
             y=alt.Y("taux_cooperation:Q", title="Taux de coopération", axis=alt.Axis(format="%")),
-            color=alt.Color("agent:N", title="Agent"),
-            strokeDash=alt.StrokeDash("agent_type:N", title="Type"),
+            color=alt.Color(FIELD_AGENT, title="Agent"),
+            strokeDash=alt.StrokeDash(FIELD_AGENT_TYPE, title="Type"),
             tooltip=["agent", "turn", alt.Tooltip("taux_cooperation", format=".1%")],
         ).properties(height=420).interactive(),
         **STRETCH_CHART,
@@ -139,9 +143,9 @@ with tab_corr:
     rc = recip.dropna(subset=["reciprocite"])
     st.altair_chart(
         alt.Chart(rc).mark_bar().encode(
-            x=alt.X("agent:N", sort="-y", title=None),
+            x=alt.X(FIELD_AGENT, sort="-y", title=None),
             y=alt.Y("reciprocite:Q", title="Réciprocité (corrélation)", scale=alt.Scale(domain=[-0.2, 1])),
-            color=alt.Color("agent_type:N", title="Type"),
+            color=alt.Color(FIELD_AGENT_TYPE, title="Type"),
             tooltip=["agent", alt.Tooltip("reciprocite", format=".2f"),
                      alt.Tooltip("score_moyen_par_tour", format=".2f")],
         ).properties(height=320),
@@ -151,8 +155,8 @@ with tab_corr:
     st.altair_chart(
         alt.Chart(rc).mark_circle(size=220).encode(
             x=alt.X("reciprocite:Q", title="Réciprocité", scale=alt.Scale(zero=False)),
-            y=alt.Y("score_moyen_par_tour:Q", title="Score moyen / tour", scale=alt.Scale(zero=False)),
-            color=alt.Color("agent_type:N", title="Type"),
+            y=alt.Y(FIELD_SCORE_PAR_TOUR, title="Score moyen / tour", scale=alt.Scale(zero=False)),
+            color=alt.Color(FIELD_AGENT_TYPE, title="Type"),
             tooltip=["agent", alt.Tooltip("reciprocite", format=".2f"),
                      alt.Tooltip("score_moyen_par_tour", format=".2f")],
         ).properties(height=340),
