@@ -4,10 +4,5 @@
   l'étape `dbt deps` (qui exige internet) pour qui clone le dépôt.
 #}
 {% macro surrogate_key(field_list) -%}
-md5(
-    {%- for f in field_list -%}
-        coalesce(cast({{ f }} as varchar), '_null_')
-        {%- if not loop.last %} || '-' || {% endif -%}
-    {%- endfor -%}
-)
+md5({% for f in field_list %}coalesce(cast({{ f }} as varchar), '_null_'){% if not loop.last %} || '-' || {% endif %}{% endfor %})
 {%- endmacro %}
